@@ -37,6 +37,7 @@ type Payload struct {
 
 // NewClient returns a client for Logdna
 func NewClient(config *LogdnaConfig) (client *Client, err error) {
+	client := new(Client)
 	if config.IngestionKey == "" {
 		config.IngestionKey = os.Getenv("LOGDNA_KEY")
 	}
