@@ -25,8 +25,6 @@ type LogdnaConfig struct {
 }
 type Client struct {
 	Config *LogdnaConfig
-
-	Response *Response
 }
 type Payload struct {
 	Line  string
