@@ -35,7 +35,7 @@ type Payload struct {
 	Env   string
 }
 
-// NewClient returns a client for thechecker-go
+// NewClient returns a client for Logdna
 func NewClient(config *LogdnaConfig) (client *Client, err error) {
 	if config.IngestionKey == "" {
 		config.IngestionKey = os.Getenv("LOGDNA_KEY")
