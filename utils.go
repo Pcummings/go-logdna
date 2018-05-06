@@ -1,6 +1,7 @@
 package logdna
 
 import (
+	"bytes"
 	"net"
 	"os"
 	"strings"
@@ -10,7 +11,7 @@ func getHostName() string {
 	name, err := os.Hostname()
 
 	if err != nil {
-		return err
+		return err.Error()
 	}
 	return name
 }
@@ -29,14 +30,14 @@ func getMacAddr() string {
 	return addr
 }
 func getIpAddr() string {
-	ip := ""
+	ipaddr := ""
 	interfaces, err := net.Interfaces()
 	if err == nil {
 		for _, i := range interfaces {
 			if i.Flags&net.FlagUp != 0 && bytes.Compare(i.HardwareAddr, nil) != 0 {
 				addrs, err := i.Addrs()
 				if err != nil {
-					return err
+					return err.Error()
 				}
 				for _, addr := range addrs {
 					var ip net.IP
@@ -53,13 +54,13 @@ func getIpAddr() string {
 					if ip == nil {
 						continue
 					}
-					ip = ip.String()
+					ipaddr = ip.String()
 				}
 				break
 			}
 		}
 	}
-	return ip
+	return ipaddr
 }
 func contains(s []string, e string) bool {
 	for _, a := range s {

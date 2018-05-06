@@ -1,11 +1,13 @@
 package logdna
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -13,7 +15,7 @@ import (
 var (
 	protocol = "https://"
 	domain   = "logs.logdna.com"
-	endpoint = "logs/ingest"
+	endPoint = "logs/ingest"
 )
 
 type LogdnaConfig struct {
@@ -101,7 +103,7 @@ func (c *Client) do(payload *Payload) {
 	q.Set("hostname", getHostName())
 	q.Set("mac", getMacAddr())
 	q.Set("ip", getIpAddr())
-	q.Set("now", int32(time.Now().Unix()))
+	q.Set("now", strconv.Itoa(int(time.Now().Unix())))
 	if len(c.Config.Tags) > 0 {
 		q.Set("tags", strings.Join(c.Config.Tags, ","))
 	}
@@ -118,5 +120,5 @@ func (c *Client) do(payload *Payload) {
 	if err != nil {
 		//handle error
 	}
-	defer Body.Close()
+	defer resp.Body.Close()
 }
