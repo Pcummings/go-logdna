@@ -52,14 +52,17 @@ func NewClient(config *LogdnaConfig) (*Client, error) {
 }
 
 func (c *Client) Info(msg string) {
-	_, filename, line, _ := runtime.Caller(1)
-	c.configurePayload(msg, filename, strconv.Itoa(line), "INFO")
-	if contains(c.config.LogLevel, "INFO") {
-		err := c.do()
-		if err != nil {
-			fmt.Println(err)
+	go func() {
+		_, filename, line, _ := runtime.Caller(1)
+		c.configurePayload(msg, filename, strconv.Itoa(line), "INFO")
+		if contains(c.config.LogLevel, "INFO") {
+			err := c.do()
+			if err != nil {
+				fmt.Println(err)
+			}
 		}
-	}
+	}()
+
 }
 
 func (c *Client) Warn(msg string) {
