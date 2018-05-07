@@ -44,6 +44,9 @@ type payloadJSON struct {
 func NewClient(config *LogdnaConfig) (*Client, error) {
 	var client Client
 	client.apiUrl = makeIngestURL(config)
+	if len(config.LogLevel) == 0 {
+		config.LogLevel = []string{"INFO", "WARN", "ERROR", "DEBUG"}
+	}
 	client.config = config
 	return &client, nil
 }
@@ -64,7 +67,9 @@ func (c *Client) Warn(msg string) {
 	c.configurePayload(msg, filename, strconv.Itoa(line), "WARN")
 	if contains(c.config.LogLevel, "WARN") {
 		err := c.do()
-		fmt.Println(err)
+		if err != nil {
+			fmt.Println(err)
+		}
 	}
 }
 func (c *Client) Error(msg string) {
@@ -72,7 +77,9 @@ func (c *Client) Error(msg string) {
 	c.configurePayload(msg, filename, strconv.Itoa(line), "ERROR")
 	if contains(c.config.LogLevel, "ERROR") {
 		err := c.do()
-		fmt.Println(err)
+		if err != nil {
+			fmt.Println(err)
+		}
 	}
 }
 func (c *Client) Debug(msg string) {
@@ -80,7 +87,9 @@ func (c *Client) Debug(msg string) {
 	c.configurePayload(msg, filename, strconv.Itoa(line), "DEBUG")
 	if contains(c.config.LogLevel, "DEBUG") {
 		err := c.do()
-		fmt.Println(err)
+		if err != nil {
+			fmt.Println(err)
+		}
 	}
 }
 func (c *Client) configurePayload(msg string, file string, line string, level string) {
