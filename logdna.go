@@ -7,16 +7,12 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"runtime"
 	"strconv"
-	"strings"
 	"time"
 )
 
-var (
-	protocol = "https://"
-	domain   = "logs.logdna.com"
-	endPoint = "logs/ingest"
-)
+const IngestBaseURL = "https://logs.logdna.com/logs/ingest"
 
 type LogdnaConfig struct {
 	IngestionKey string
@@ -26,100 +22,119 @@ type LogdnaConfig struct {
 	Environment  string
 }
 type Client struct {
-	Config *LogdnaConfig
+	config  *LogdnaConfig
+	apiUrl  url.URL
+	payload payloadJSON
 }
-type Payload struct {
-	Line  string
-	App   string
-	Level string
-	Env   string
+type LineJSON struct {
+	Msg        string `json:"message"`
+	File       string `json:"file"`
+	Linenumber string `json:"linenumber"`
+}
+type logLineJSON struct {
+	Line  string `json:"line"`
+	App   string `json:"app"`
+	Level string `json:"level"`
+	Env   string `json:"env"`
+}
+type payloadJSON struct {
+	Lines []logLineJSON `json:"lines"`
 }
 
-// NewClient returns a client for Logdna
 func NewClient(config *LogdnaConfig) (*Client, error) {
-	client := new(Client)
-	if config.IngestionKey == "" {
-		config.IngestionKey = os.Getenv("LOGDNA_KEY")
-	}
-	if config.IngestionKey == "" {
-		fmt.Println("LogDNA Ingestion Key not provided")
-		os.Exit(0)
-	}
-	client.Config = config
-	return client, nil
+	var client Client
+	client.apiUrl = makeIngestURL(config)
+	client.config = config
+	return &client, nil
 }
+
 func (c *Client) Info(msg string) {
-	payload := c.configurePayload()
-	payload.Level = "INFO"
-	payload.Line = msg
-	if contains(c.Config.Tags, "INFO") {
-		c.do(payload)
+	_, filename, line, _ := runtime.Caller(1)
+	c.configurePayload(msg, filename, strconv.Itoa(line), "INFO")
+	if contains(c.config.LogLevel, "INFO") {
+		err := c.do()
+		if err != nil {
+			fmt.Println(err)
+		}
 	}
 }
-func (c *Client) Notice(msg string) {
-	payload := c.configurePayload()
-	payload.Level = "NOTICE"
-	payload.Line = msg
-	if contains(c.Config.Tags, "NOTICE") {
-		c.do(payload)
-	}
-}
+
 func (c *Client) Warn(msg string) {
-	payload := c.configurePayload()
-	payload.Level = "WARN"
-	payload.Line = msg
-	if contains(c.Config.Tags, "WARN") {
-		c.do(payload)
+	_, filename, line, _ := runtime.Caller(1)
+	c.configurePayload(msg, filename, strconv.Itoa(line), "WARN")
+	if contains(c.config.LogLevel, "WARN") {
+		err := c.do()
+		fmt.Println(err)
 	}
 }
 func (c *Client) Error(msg string) {
-	payload := c.configurePayload()
-	payload.Level = "ERROR"
-	payload.Line = msg
-	if contains(c.Config.Tags, "ERROR") {
-		c.do(payload)
+	_, filename, line, _ := runtime.Caller(1)
+	c.configurePayload(msg, filename, strconv.Itoa(line), "ERROR")
+	if contains(c.config.LogLevel, "ERROR") {
+		err := c.do()
+		fmt.Println(err)
 	}
 }
-func (c *Client) Fatal(msg string) {
-	payload := c.configurePayload()
-	payload.Level = "FATAL"
-	payload.Line = msg
-	if contains(c.Config.Tags, "FATAL") {
-		c.do(payload)
+func (c *Client) Debug(msg string) {
+	_, filename, line, _ := runtime.Caller(1)
+	c.configurePayload(msg, filename, strconv.Itoa(line), "DEBUG")
+	if contains(c.config.LogLevel, "DEBUG") {
+		err := c.do()
+		fmt.Println(err)
 	}
 }
-func (c *Client) configurePayload() *Payload {
-	payload := new(Payload)
-	payload.App = c.Config.AppName
-	payload.Env = c.Config.Environment
-	return payload
-}
-func (c *Client) do(payload *Payload) {
-	u := &url.URL{
-		Scheme: protocol,
-		Host:   domain,
-		Path:   fmt.Sprintf("/%s", endPoint),
+func (c *Client) configurePayload(msg string, file string, line string, level string) {
+	message := &LineJSON{
+		Msg:        msg,
+		File:       file,
+		Linenumber: line,
 	}
-	q := u.Query()
-	q.Set("hostname", getHostName())
-	q.Set("mac", getMacAddr())
-	q.Set("ip", getIpAddr())
-	q.Set("now", strconv.Itoa(int(time.Now().Unix())))
-	if len(c.Config.Tags) > 0 {
-		q.Set("tags", strings.Join(c.Config.Tags, ","))
-	}
-	payloadBytes, err := json.Marshal(payload)
+	e, err := json.Marshal(message)
 	if err != nil {
-		//handle error
+		fmt.Println(err)
+		return
 	}
-	body := bytes.NewReader(payloadBytes)
-	r, err := http.NewRequest("POST", u.String(), body)
-	r.SetBasicAuth(c.Config.IngestionKey, "")
-	r.Header.Set("Content-Type", "application/json; charset=UTF-8")
+	logLine := logLineJSON{
+		Line:  string(e),
+		App:   c.config.AppName,
+		Env:   c.config.Environment,
+		Level: level,
+	}
+	c.payload.Lines = append(c.payload.Lines, logLine)
+}
+func (c *Client) do() error {
+	jsonPayload, err := json.Marshal(c.payload)
+	if err != nil {
+		return err
+	}
 
-	resp, err := http.DefaultClient.Do(r)
+	jsonReader := bytes.NewReader(jsonPayload)
+
+	resp, err := http.Post(c.apiUrl.String(), "application/json", jsonReader)
 	if err != nil {
-		//handle error
+		return err
 	}
 	defer resp.Body.Close()
+
+	c.payload = payloadJSON{}
+	return err
+}
+func makeIngestURL(cfg *LogdnaConfig) url.URL {
+	u, _ := url.Parse(IngestBaseURL)
+	if cfg.IngestionKey == "" {
+		cfg.IngestionKey = os.Getenv("LOGDNA_KEY")
+	}
+	if cfg.IngestionKey == "" {
+		fmt.Println("LogDNA Ingestion Key not provided")
+		os.Exit(0)
+	}
+	u.User = url.User(cfg.IngestionKey)
+	values := url.Values{}
+	values.Set("hostname", getHostName())
+	values.Set("mac", getMacAddr())
+	values.Set("ip", getIpAddr())
+	values.Set("now", strconv.FormatInt(time.Time{}.UnixNano(), 10))
+	u.RawQuery = values.Encode()
+
+	return *u
 }
